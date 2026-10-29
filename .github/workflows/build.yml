@@ -93,7 +93,7 @@ jobs:
           Code signing policy: https://github.com/the-Otomator/remote-consent-agent/blob/main/CODE_SIGNING_POLICY.md
           SignPath approval is pending; no signed release is claimed.
           EOF
-          gh release create "$RELEASE_TAG" artifact/RemoteConsentAgent-unsigned.exe artifact/SHA256SUMS.txt artifact/RemoteConsentAgent-windows-x64.zip --verify-tag --title "Remote Consent Agent $RELEASE_TAG (unsigned)" --notes-file notes.md
+          gh release create "$RELEASE_TAG" artifact/release/RemoteConsentAgent-unsigned.exe artifact/release/SHA256SUMS.txt artifact/RemoteConsentAgent-windows-x64.zip --verify-tag --title "Remote Consent Agent $RELEASE_TAG (unsigned)" --notes-file notes.md
   signpath:
     # Deliberately disabled. Enable only after provider approval, configuration
     # review and a required reviewer on the code-signing environment.
