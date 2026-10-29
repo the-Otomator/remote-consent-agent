@@ -2,14 +2,17 @@ param(
     [Parameter(Mandatory)][string]$File,
     [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedSha256,
     [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{40}$')][string]$Thumbprint,
-    [Parameter(Mandatory)][string]$SignTool
+    [Parameter(Mandatory)][string]$SignTool,
+    [uri]$TimestampUrl = 'http://time.certum.pl'
 )
 $ErrorActionPreference = 'Stop'
 $target = (Resolve-Path -LiteralPath $File).Path
 if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'CI artifact hash mismatch' }
 # Authenticate in SimplySign Desktop using the phone before running this script.
 # The cloud key remains in the provider HSM. Never export it or put codes here.
-& $SignTool sign /sha1 $Thumbprint /fd SHA256 /tr https://time.certum.pl /td SHA256 $target
+# Certum's published RFC3161 endpoint. The timestamp is cryptographically
+# verified by signtool; no account credential is sent to the timestamp server.
+& $SignTool sign /sha1 $Thumbprint /fd SHA256 /tr $TimestampUrl.AbsoluteUri /td SHA256 $target
 if ($LASTEXITCODE -ne 0) { throw 'Signing failed' }
 & $SignTool verify /pa /all $target
 if ($LASTEXITCODE -ne 0) { throw 'Authenticode verification failed' }
