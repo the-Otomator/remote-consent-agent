@@ -3,7 +3,7 @@ import sys
 import unittest
 import uuid
 from unittest.mock import patch
-from test_protocol import ProtocolTests
+import test_protocol
 
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows native UI')
@@ -12,13 +12,14 @@ class NativeUITests(unittest.TestCase):
         import ui
         import tkinter as tk
         self.ui_module, self.tk = ui, tk
-        self.fixture = ProtocolTests(methodName='runTest')
+        self.fixture = test_protocol.ProtocolTests(methodName='runTest')
         self.fixture.setUp()
         self.addCleanup(patch.stopall)
         patch('ui.input_desktop_unlocked', return_value=True).start()
         patch('ui.user_name', return_value='Example user').start()
         patch('ui.time.time', lambda: self.fixture.now).start()
         self.ui = ui.CustomerUI('en', gallery=True)
+        self.ui.snapshot['online'] = True
         self.addCleanup(self.close)
         def dispatch(command):
             action = command['action']
@@ -65,7 +66,7 @@ class NativeUITests(unittest.TestCase):
     def test_keyboard_does_not_approve(self):
         self.ui.request_window(self.fixture.raw)
         button = next(b for b in self.buttons(self.ui.window) if b.cget('text') == 'Approve')
-        self.assertFalse(button.cget('takefocus'))
+        self.assertEqual(str(button.cget('takefocus')), '0')
         button.focus_force()
         button.event_generate('<KeyPress-Return>')
         button.event_generate('<KeyPress-space>')
