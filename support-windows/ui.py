@@ -17,7 +17,7 @@ from urllib.request import build_opener
 from consent_client import display
 from windows_host import input_desktop_unlocked, ipc
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 def remote_image(url):
