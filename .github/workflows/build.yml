@@ -1,0 +1,112 @@
+name: Windows consent build
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    outputs:
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
+      - run: python -m pip install -r support-windows/requirements.txt
+      - name: Consent, configuration and native boundary tests
+        run: python -m unittest discover -s support-windows -p 'test_*.py' -v
+      - name: Build unsigned executable
+        run: ./support-windows/build.ps1
+      - name: Verify version tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: python
+        run: |
+          import os, sys
+          sys.path.insert(0, 'support-windows')
+          from ui import VERSION
+          assert os.environ['GITHUB_REF_NAME'] == 'v' + VERSION, 'Tag/version mismatch'
+      - name: Collect provenance and dependency licenses
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item support-windows/dist/RemoteConsentAgent-unsigned.exe release/
+          Copy-Item LICENSE,README.md,CODE_SIGNING_POLICY.md,THIRD_PARTY_NOTICES.md release/
+          python scripts/collect-licenses.py release/THIRD-PARTY-LICENSES
+          python -m pip freeze | Set-Content -Encoding utf8 release/dependencies.txt
+          python --version | Set-Content -Encoding utf8 release/python-version.txt
+          '${{ github.sha }}' | Set-Content -Encoding utf8 release/source-sha.txt
+          $file = Get-Item release/RemoteConsentAgent-unsigned.exe
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  RemoteConsentAgent-unsigned.exe" | Set-Content -Encoding ascii release/SHA256SUMS.txt
+          Compress-Archive -Path release/* -DestinationPath RemoteConsentAgent-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        id: artifact
+        with:
+          name: remote-consent-agent-windows-x64-unsigned
+          path: |
+            release/
+            RemoteConsentAgent-windows-x64.zip
+          if-no-files-found: error
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan public tree and fresh history with Gitleaks
+        run: |
+          curl --fail --location --retry 2 -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          curl --fail --location --retry 2 -o checksums.txt https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_checksums.txt
+          grep 'gitleaks_8.24.3_linux_x64.tar.gz$' checksums.txt | sed 's/gitleaks_8.24.3_linux_x64.tar.gz/gitleaks.tar.gz/' | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git . --redact --report-format json --report-path gitleaks-history.json
+          ./gitleaks dir support-windows --redact --report-format json --report-path gitleaks-source.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: secret-scan
+          path: gitleaks-*.json
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build, secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: remote-consent-agent-windows-x64-unsigned
+          path: artifact
+      - name: Publish tagged CI artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cat > notes.md <<'EOF'
+          Unsigned Windows x64 build generated from this version tag by GitHub Actions.
+          Verify the executable using SHA256SUMS.txt. The ZIP includes dependency licenses and build provenance.
+          Initial public release; signed installer/configuration and separate customer acceptance are required before customer rollout.
+          Code signing policy: https://github.com/the-Otomator/remote-consent-agent/blob/main/CODE_SIGNING_POLICY.md
+          SignPath approval is pending; no signed release is claimed.
+          EOF
+          gh release create "$RELEASE_TAG" artifact/RemoteConsentAgent-unsigned.exe artifact/SHA256SUMS.txt artifact/RemoteConsentAgent-windows-x64.zip --verify-tag --title "Remote Consent Agent $RELEASE_TAG (unsigned)" --notes-file notes.md
+  signpath:
+    # Deliberately disabled. Enable only after provider approval, configuration
+    # review and a required reviewer on the code-signing environment.
+    if: ${{ false }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: code-signing
+    steps:
+      - uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: remote-consent-agent
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+*.pem
+*.pfx
+*.p12
+*.key
+.env*
+config.json
+enrollment.json
+
