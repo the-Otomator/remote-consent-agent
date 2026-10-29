@@ -12,7 +12,9 @@ for distribution in importlib.metadata.distributions():
     name = distribution.metadata['Name']
     target = destination / name
     target.mkdir(exist_ok=True)
-    (target / 'METADATA.txt').write_text(str(distribution.metadata), encoding='utf-8')
+    # Preserve the original metadata text. Re-serializing email-style metadata
+    # can reject legitimate multiline descriptions (for example altgraph).
+    (target / 'METADATA.txt').write_text(distribution.read_text('METADATA') or '', encoding='utf-8')
     for file in distribution.files or []:
         if any(part.lower().startswith(('license', 'licence', 'copying', 'notice')) for part in file.parts):
             original = Path(distribution.locate_file(file))
