@@ -31,6 +31,8 @@ jobs:
           assert os.environ['GITHUB_REF_NAME'] == 'v' + VERSION, 'Tag/version mismatch'
       - name: Collect provenance and dependency licenses
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item support-windows/dist/RemoteConsentAgent-unsigned.exe release/
           Copy-Item LICENSE,README.md,CODE_SIGNING_POLICY.md,THIRD_PARTY_NOTICES.md release/
@@ -42,6 +44,7 @@ jobs:
           $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
           "$hash  RemoteConsentAgent-unsigned.exe" | Set-Content -Encoding ascii release/SHA256SUMS.txt
           Compress-Archive -Path release/* -DestinationPath RemoteConsentAgent-windows-x64.zip
+          python scripts/verify-package.py RemoteConsentAgent-windows-x64.zip
       - uses: actions/upload-artifact@v4
         id: artifact
         with:

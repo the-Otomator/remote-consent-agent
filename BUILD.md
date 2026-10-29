@@ -78,3 +78,8 @@ artifact and verifies its SHA-256, then runs `./sign-certum.ps1` with its path,
 expected hash, certificate thumbprint and signtool path. No phone code or secret
 is passed to this script. It verifies Authenticode after signing and prints the
 new hash. Nothing is uploaded automatically.
+
+The default RFC3161 timestamp URL follows
+[Certum's official cloud signing instructions](https://files.certum.eu/documents/manual_en/CS-Code_Signing_in_the_Cloud_Signtool_jarsigner_signing.pdf).
+Use `-TimestampUrl` only for a reviewed timestamp service. The timestamp request
+contains a digest, never the SimplySign phone code or private key.
